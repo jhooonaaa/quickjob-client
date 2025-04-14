@@ -5,13 +5,16 @@ import { useNavigate } from "react-router-dom";
 
 function App() {
   const navigate = useNavigate();
+
+  const apiUrl = import.meta.env.VITE_ENDPOINT_URL;
+
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showError, setShowError] = useState(false);
 
   const handleLogin = async () => {
     try {
-      const response = await axios.post(`${process.env.REACT_APP_ENDPOINT_URL}/check-accounts`, { username, password });
+      const response = await axios.post(`${apiUrl}/check-accounts`, { username, password });
       if (response.data.exit) {
         localStorage.setItem("username", username); // ✅ Store username in localStorage
         setShowError(false);
