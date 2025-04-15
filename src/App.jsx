@@ -30,7 +30,7 @@ function App() {
   return (
     <div className="w-screen h-screen flex justify-center items-center bg-pink-300">
       <div className="w-[430px] h-[430px] bg-pink-200 flex flex-col justify-center p-8 gap-6 rounded-3xl shadow-lg border-4 border-pink-400">
-        <h1 className="text-4xl text-center font-bold text-pink-700 mb-2">💕 LOGIN 💕</h1>
+        <h1 className="text-4xl text-center font-bold text-pink-700 mb-2"> LOGIN </h1>
         
         {showError && (
           <div className="bg-pink-400 text-white p-3 rounded-lg font-medium shadow-md">
@@ -51,7 +51,7 @@ function App() {
         </div>
         
         <button type="button" onClick={handleLogin} className="bg-pink-600 text-white py-3 font-medium text-xl rounded-xl shadow-md hover:bg-pink-700">
-          🎀 LOGIN 🎀
+           LOGIN 
         </button>
       </div>
     </div>

@@ -12,6 +12,7 @@ function Todo() {
   const [editingLists, setEditingLists] = useState(null);
 
   const [message, setMessage] = useState("");
+  const apiUrl = import.meta.env.VITE_ENDPOINT_URL;
 
   useEffect(() => {
     getTitles();
@@ -19,13 +20,13 @@ function Todo() {
 
   const getTitles = async () => {
     try {
-      const response = await axios.get(`${process.env.REACT_APP_ENDPOINT_URL}/get-titles`);
+      const response = await axios.get(`${apiUrl}/get-titles`);
       const fetchedTitles = response.data.titles;
       const done = [];
       const ongoing = [];
 
       for (const title of fetchedTitles) {
-        const taskResponse = await axios.get(`${process.env.REACT_APP_ENDPOINT_URL}/get-lists/${title.id}`);
+        const taskResponse = await axios.get(`${apiUrl}/get-lists/${title.id}`);
         const taskLists = taskResponse.data.lists;
         const allChecked = taskLists.length > 0 && taskLists.every(task => task.status);
         allChecked ? done.push(title) : ongoing.push(title);
@@ -40,7 +41,7 @@ function Todo() {
 
   const getLists = async (titleId, showCheckedOnly = false) => {
     try {
-      const response = await axios.get(`${process.env.REACT_APP_ENDPOINT_URL}/get-lists/${titleId}`);
+      const response = await axios.get(`${apiUrl}/get-lists/${titleId}`);
       let taskLists = response.data.lists;
       if (showCheckedOnly) taskLists = taskLists.filter(task => task.status);
       setLists((prevLists) => ({ ...prevLists, [titleId]: taskLists }));
@@ -51,7 +52,7 @@ function Todo() {
 
   const handleCheckboxChange = async (listId, titleId) => {
     try {
-      await axios.post(`${process.env.REACT_APP_ENDPOINT_URL}/update-status`, {
+      await axios.post(`${apiUrl}/update-status`, {
         title_id: titleId,
         list_id: listId,
         status: true,
@@ -71,7 +72,7 @@ function Todo() {
   const updateTitle = async () => {
     if (!editingTitle.title.trim()) return;
     try {
-      await axios.post(`${process.env.REACT_APP_ENDPOINT_URL}/update-title`, {
+      await axios.post(`${apiUrl}/update-title`, {
         title_id: editingTitle.id,
         title: editingTitle.title,
       });
@@ -89,7 +90,7 @@ function Todo() {
 
   const deleteTitle = async (titleId) => {
     try {
-      await axios.post(`${process.env.REACT_APP_ENDPOINT_URL}/delete-todo`, { title_id: titleId });
+      await axios.post(`${apiUrl}/delete-todo`, { title_id: titleId });
       setMessage("Deleted successfully!");
       setTimeout(() => setMessage(""), 3000);
       getTitles();
@@ -127,7 +128,7 @@ function Todo() {
   const handleDeleteListItem = async (listId, index) => {
     if (listId) {
       try {
-        await axios.post(`${process.env.REACT_APP_ENDPOINT_URL}/delete-list`, { list_id: listId });
+        await axios.post(`${apiUrl}/delete-list`, { list_id: listId });
 
         // Immediately update state to remove the deleted item
         setLists((prevLists) => {
@@ -160,13 +161,13 @@ function Todo() {
 
         if (list.id) {
           // Update existing list
-          await axios.post(`${process.env.REACT_APP_ENDPOINT_URL}/update-list`, {
+          await axios.post(`${apiUrl}/update-list`, {
             list_id: list.id,
             list_desc: list.list_desc,
           });
         } else {
           // Add new list item
-          const response = await axios.post(`${process.env.REACT_APP_ENDPOINT_URL}/add-list`, {
+          const response = await axios.post(`${apiUrl}/add-list`, {
             title_id: editingLists.titleId,
             list_desc: list.list_desc,
           });
