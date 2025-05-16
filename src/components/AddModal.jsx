@@ -66,8 +66,8 @@ export default function AddModal({ hide, onTaskAdded }) {
 
                 
                 {message && (
-                    <div className={`text-center text-sm font-semibold p-2 rounded-lg mb-3 ${
-                        message.includes("✅") ? "text-green-700 bg-green-200" : "text-red-700 bg-red-200"
+                    <div className={`text-center text-sm font-bold font-[Montserrat] p-2 rounded-lg mb-3 ${
+                        message.includes("✅") ? "text-green-700 " : "text-red-700 bg-red-200"
                     }`}>
                         {message}
                     </div>

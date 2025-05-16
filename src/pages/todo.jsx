@@ -212,13 +212,16 @@ function Todo() {
       🎀 To-Do List 🎀
     </h2>
 
-    {message && <div className="text-center text-green-600 mb-1 text-sm">{message}</div>}
 
     <div className="flex w-full max-w-4xl gap-4">
       {/* Ongoing Section */}
       <div className="flex-1 p-4 rounded-2xl shadow border-2 border-pink-400 bg-gradient-to-r from-pink-200 to-purple-300">
         <h3 className="text-center font-semibold mb-3 text-pink-800 text-lg">Ongoing</h3>
-
+        {message && (
+    <div className="text-green-700 text-sm font-bold font-[Montserrat] text-center mb-2">
+      {message}
+    </div>
+  )}
         {titles.map((title) => (
           <div key={title.id} className="mb-2">
             {editingTitle.id === title.id ? (
@@ -285,7 +288,7 @@ function Todo() {
         ))}
 
         {editingLists && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center  bg-opacity-30 backdrop-blur-sm">
             <div className="p-4 bg-pink-300 rounded-xl shadow-2xl border-2 border-pink-400 w-[90%] max-w-sm">
               <h3 className="text-center font-semibold text-pink-800 text-base mb-3">🎀 Edit List 🎀</h3>
               <div className="space-y-2 max-h-[300px] overflow-y-auto">
