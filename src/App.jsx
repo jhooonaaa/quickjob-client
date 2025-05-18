@@ -39,16 +39,25 @@ function App() {
         )}
         
         <div className="flex flex-col">
-          <label htmlFor="username" className="text-pink-800 font-medium">Username:</label>
-          <input type="text" className="outline-none border-2 border-pink-400 p-2 rounded-xl focus:ring-2 focus:ring-pink-500 bg-pink-100"
-            onChange={(e) => setUsername(e.target.value)} />
-        </div>
-        
-        <div className="flex flex-col">
-          <label htmlFor="password" className="text-pink-800 font-medium">Password:</label>
-          <input type="password" className="outline-none border-2 border-pink-400 p-2 rounded-xl focus:ring-2 focus:ring-pink-500 bg-pink-100"
-            onChange={(e) => setPassword(e.target.value)} />
-        </div>
+  <label htmlFor="username" className="text-pink-800 font-medium">Username:</label>
+  <input
+    type="text"
+    placeholder="username:jhooo"
+    className="outline-none border-2 border-pink-400 p-2 rounded-xl focus:ring-2 focus:ring-pink-500 bg-pink-100"
+    onChange={(e) => setUsername(e.target.value)}
+  />
+</div>
+
+<div className="flex flex-col">
+  <label htmlFor="password" className="text-pink-800 font-medium">Password:</label>
+  <input
+    type="password"
+    placeholder="password:1234"
+    className="outline-none border-2 border-pink-400 p-2 rounded-xl focus:ring-2 focus:ring-pink-500 bg-pink-100"
+    onChange={(e) => setPassword(e.target.value)}
+  />
+</div>
+
         
         <button type="button" onClick={handleLogin} className="bg-pink-600 text-white py-3 font-medium text-xl rounded-xl shadow-md hover:bg-pink-700">
            LOGIN 
