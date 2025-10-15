@@ -5,18 +5,34 @@ import { useNavigate } from "react-router-dom";
 function SignupClient() {
   const apiUrl = import.meta.env.VITE_ENDPOINT_URL;
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: "", email: "", password: "", contact: "" });
+
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    contact: "",
+  });
   const [idPhoto, setIdPhoto] = useState(null);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setMessage("");
+    setError("");
+
     const fd = new FormData();
     Object.entries(form).forEach(([k, v]) => fd.append(k, v));
     if (idPhoto) fd.append("idPhoto", idPhoto);
 
-    await axios.post(`${apiUrl}/signup-client`, fd);
-    alert("Client registered! Please login.");
-    navigate("/");
+    try {
+      await axios.post(`${apiUrl}/signup-client`, fd);
+      setMessage("✅ Client registered successfully!");
+      setTimeout(() => navigate("/"), 2000);
+    } catch (err) {
+      console.error("Signup failed:", err);
+      setError("❌ Signup failed. Please check your input and try again.");
+    }
   };
 
   return (
@@ -32,29 +48,40 @@ function SignupClient() {
         <p className="text-center text-gray-500 text-sm">
           Create your account as a client
         </p>
+         {/* Success/Error Messages */}
+        {message && (
+          <p className="text-center text-sm text-green-600 mt-3">{message}</p>
+        )}
+        {error && (
+          <p className="text-center text-sm text-red-600 mt-3">{error}</p>
+        )}
 
         {/* Inputs */}
         <input
           placeholder="Full Name"
           className="border border-gray-300 p-3 w-full rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-amber-600 outline-none"
           onChange={(e) => setForm({ ...form, name: e.target.value })}
+          required
         />
         <input
           placeholder="Email"
           type="email"
           className="border border-gray-300 p-3 w-full rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-amber-600 outline-none"
           onChange={(e) => setForm({ ...form, email: e.target.value })}
+          required
         />
         <input
           placeholder="Password"
           type="password"
           className="border border-gray-300 p-3 w-full rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-amber-600 outline-none"
           onChange={(e) => setForm({ ...form, password: e.target.value })}
+          required
         />
         <input
           placeholder="Contact"
           className="border border-gray-300 p-3 w-full rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-amber-600 outline-none"
           onChange={(e) => setForm({ ...form, contact: e.target.value })}
+          required
         />
 
         {/* File Upload */}
@@ -83,6 +110,8 @@ function SignupClient() {
         >
           Cancel
         </button>
+
+
       </form>
     </div>
   );

@@ -15,32 +15,47 @@ function App() {
 
   // ---------------- LOGIN ----------------
   const handleLogin = async () => {
-    try {
-      const response = await axios.post(`${apiUrl}/login`, { email, password });
+  try {
+    const response = await axios.post(`${apiUrl}/login`, { email, password });
 
-      if (response.data.success) {
-        const userData = {
-          id: response.data.id,  
-          name: response.data.name,
-          email: response.data.email,
-          role: response.data.role,
-        };
+    if (response.data.success) {
+      const userData = {
+        id: response.data.id,
+        name: response.data.name,
+        email: response.data.email,
+        role: response.data.role,
+      };
 
-        localStorage.setItem("user", JSON.stringify(userData));
-
-        if (userData.role === "client") navigate("/client-dashboard");
-        if (userData.role === "professional") navigate("/professional-dashboard");
-      } else if (response.data.needsVerification) {
-        setNeedsVerification(true);
-        setShowError(response.data.message);
-      } else {
-        setShowError("Invalid email or password");
+      // ✅ Save to separate localStorage key depending on role
+      if (userData.role === "admin") {
+        localStorage.setItem("adminUser", JSON.stringify(userData));
+        navigate("/admin-dashboard");
+      } 
+      else if (userData.role === "client") {
+        localStorage.setItem("clientUser", JSON.stringify(userData));
+        navigate("/client-dashboard");
+      } 
+      else if (userData.role === "professional") {
+        localStorage.setItem("professionalUser", JSON.stringify(userData));
+        navigate("/professional-dashboard");
       }
-    } catch (error) {
-      console.error("Login error:", error);
-      setShowError("Login failed. Please try again.");
+    } 
+    else if (response.data.needsVerification && response.data.role !== "admin") {
+      // only trigger verification for non-admin users
+      setNeedsVerification(true);
+      setShowError(response.data.message);
+    } 
+    else {
+      setShowError("Invalid email or password");
     }
-  };
+  } catch (error) {
+    console.error("Login error:", error);
+    setShowError("Login failed. Please try again.");
+  }
+};
+
+
+
 
   // ---------------- VERIFY ----------------
   const handleVerify = async () => {

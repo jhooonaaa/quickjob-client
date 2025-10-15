@@ -30,7 +30,7 @@ const filteredList = professionals.filter((p) => {
   
 
   useEffect(() => {
-    const admin = localStorage.getItem("admin");
+    const admin = localStorage.getItem("adminUser");
     if (!admin) navigate("/admin-login");
 
     // TODO: Replace with your API calls
@@ -52,8 +52,8 @@ const filteredList = professionals.filter((p) => {
   }, [navigate]);
 
   const handleLogout = () => {
-    localStorage.removeItem("admin");
-    navigate("/admin-login");
+    localStorage.removeItem("adminUser");
+    navigate("/");
   };
 useEffect(() => {
   const fetchProfessionals = async () => {

@@ -14,7 +14,8 @@ function ProfDashboard() {
   const [activeTab, setActiveTab] = useState("profile");
    const [showAboutModal, setShowAboutModal] = useState(false);
   const [user, setUser] = useState(null);
-  const [clientRequests, setClientRequests] = useState([]);
+  const [ClientRequests, setClientRequests] = useState([]);
+  const allRequests = ClientRequests;
 const [requestFilter, setRequestFilter] = useState("all");
   const [availabilityMode, setAvailabilityMode] = useState("weekly");
   const [messageFilter, setMessageFilter] = useState("all");
@@ -47,6 +48,8 @@ const [bankInfo, setBankInfo] = useState({
   accountNumber: "",
   accountName: "",
 });
+
+
 const fetchNotifications = async () => {
   try {
     const res = await fetch(`${apiUrl}/notifications/${user.id}`);
@@ -131,6 +134,35 @@ const deleteNotification = async (notifId) => {
     console.error("Delete notification error:", err);
   }
 };
+
+const markAsCompleted = async (request) => {
+  try {
+    // ✅ Instant UI feedback
+    setClientRequests((prev) =>
+      prev.map((r) =>
+        r.id === request.id ? { ...r, status: "completed" } : r
+      )
+    );
+
+    // ✅ Update backend (use unified /requests/update endpoint)
+    const res = await fetch(`${apiUrl}/requests/update`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        requestId: request.id,
+        status: "completed",
+      }),
+    });
+
+    if (!res.ok) throw new Error("Failed to mark as completed");
+
+    // ✅ Optionally refetch requests to sync latest data
+    fetchClientRequests?.();
+  } catch (err) {
+    console.error("Mark as completed error:", err);
+  }
+};
+
 
 
   // Earnings
@@ -225,8 +257,8 @@ const updateRequestStatus = async (requestId, status) => {
 
 // Filtering logic
 const getFilteredRequests = () => {
-  if (requestFilter === "all") return clientRequests;
-  return clientRequests.filter((req) => req.status === requestFilter);
+  if (requestFilter === "all") return ClientRequests;
+  return ClientRequests.filter((req) => req.status === requestFilter);
 };
 
 // Helpers for UI colors
@@ -249,12 +281,15 @@ const getUrgencyColor = (urgency) => {
   switch (urgency) {
     case "high":
       return "text-red-500 font-semibold";
+    case "normal":
+      return "text-yellow-500";
     case "low":
       return "text-green-500";
     default:
-      return "text-gray-500";
+      return "text-gray-400";
   }
 };
+
 
 
 
@@ -351,18 +386,19 @@ const fetchEarnings = async () => {
 
   // ---------------- AUTH ----------------
   useEffect(() => {
-    const userData = localStorage.getItem("user");
-    if (userData) {
-      setUser(JSON.parse(userData));
-    } else {
-      navigate("/");
-    }
-  }, [navigate]);
-
-  const handleLogout = () => {
-    localStorage.removeItem("user");
+  const userData = localStorage.getItem("professionalUser");
+  if (userData) {
+    setUser(JSON.parse(userData));
+  } else {
     navigate("/");
-  };
+  }
+}, [navigate]);
+
+const handleLogout = () => {
+  localStorage.removeItem("professionalUser");
+  navigate("/");
+};
+
 
   // ---------------- PROFILE ----------------
  const fetchProfile = async () => {
@@ -827,14 +863,17 @@ fetchNotifications();
     notifications.map((notif) => (
       <div
         key={notif.id}
-        className={`p-3 border-b text-sm relative ${
-          notif.read ? "bg-gray-50" : "bg-blue-50"
-        }`}
+        className={`p-3 border-b text-sm relative transition-colors ${
+  notif.read
+    ? "bg-gray-50 hover:bg-gray-100"
+    : "bg-blue-50 hover:bg-blue-100"
+}`}
+
       >
         {/* Notification content */}
         <div
           className="cursor-pointer pr-6"
-          onClick={() => handleNotificationClick(notif.id, notif.target_tab)}
+          onClick={() => handleNotificationClick(notif.id, notif.targetTab)}
         >
           <p>{notif.message}</p>
           <span className="text-xs text-gray-500">
@@ -949,29 +988,32 @@ fetchNotifications();
                 <div className="p-6 relative">
                   <div className="flex flex-col md:flex-row gap-6">
                     {/* Profile Picture */}
-                    <div className="relative -mt-16 md:-mt-12">
-                      <div className="w-24 h-24 rounded-full bg-gray-300 border-4 border-background overflow-hidden flex items-center justify-center">
-                        {profileData.profilePicture ? (
-                          <img
-                            src={profileData.profilePicture || "/default-avatar.png"}
-                            alt="Profile"
-                            onClick={() => setSelectedImage(profileData.profilePicture)}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-2xl text-gray-600">👤</span>
-                        )}
-                      </div>
-                      <label className="absolute bottom-0 right-0 bg-background border border-border rounded-full p-2 hover:bg-accent cursor-pointer">
-                        <Camera className="w-4 h-4" />
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => handleFileUpload("profilePicture", e.target.files[0])}
-                        />
-                      </label>
-                    </div>
+                   <div className="relative -mt-20 md:-mt-16">
+            <div className="w-32 h-32 rounded-full bg-gray-300 border-4 border-white overflow-hidden flex items-center justify-center">
+    {profileData.profilePicture ? (
+      <img
+        src={profileData.profilePicture || "/default-avatar.png"}
+        alt="Profile"
+        onClick={() => setSelectedImage(profileData.profilePicture)}
+        className="w-full h-full object-cover"
+      />
+    ) : (
+      <span className="text-2xl text-gray-600">👤</span>
+    )}
+
+    {/* Camera button positioned properly at bottom-right of the circle */}
+    <label className="absolute bottom-0 right-0 bg-white border border-gray-300 rounded-full p-2 hover:bg-gray-100 cursor-pointer">
+      <Camera className="w-4 h-4" />
+      <input
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => handleFileUpload("profilePicture", e.target.files[0])}
+      />
+    </label>
+  </div>
+</div>
+
                   {selectedImage && (
   <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-50">
     <div className="bg-white p-4 rounded-lg relative max-w-3xl w-full">
@@ -1587,93 +1629,167 @@ fetchNotifications();
 
 {activeTab === "requests" && (
   <div className="space-y-6">
-    {/* Header with filters */}
+    {/* Header */}
     <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
       <div>
-        <h2 className="text-3xl font-bold text-stone-800">Client Requests</h2>
-        <p className="text-gray-500 text-sm">Manage booking requests from your clients</p>
+        <h2 className="text-2xl font-bold text-stone-800">Client Requests</h2>
+        <p className="text-gray-500 text-sm">
+          Manage your booking requests and inquiries
+        </p>
       </div>
       <div className="flex gap-3">
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Search requests..."
+            className="pl-3 pr-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          />
+        </div>
         <select
           value={requestFilter}
           onChange={(e) => setRequestFilter(e.target.value)}
-          className="px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-stone-600 text-sm"
+          className="px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
         >
           <option value="all">All Requests</option>
           <option value="pending">Pending</option>
           <option value="confirmed">Confirmed</option>
-          <option value="declined">Declined</option>
           <option value="completed">Completed</option>
+          <option value="declined">Declined</option>
         </select>
       </div>
     </div>
 
+    {/* Stats */}
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <p className="text-sm text-gray-500">Pending</p>
+        <p className="text-2xl font-bold text-yellow-500">
+          {allRequests.filter((r) => r.status === "pending").length}
+        </p>
+      </div>
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <p className="text-sm text-gray-500">Confirmed</p>
+        <p className="text-2xl font-bold text-green-500">
+          {allRequests.filter((r) => r.status === "confirmed").length}
+        </p>
+      </div>
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <p className="text-sm text-gray-500">Completed</p>
+        <p className="text-2xl font-bold text-blue-500">
+          {allRequests.filter((r) => r.status === "completed").length}
+        </p>
+      </div>
+    </div>
+
     {/* Requests List */}
-    <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-      <div className="p-6">
+    <div className="bg-white border border-gray-200 rounded-lg shadow">
+      <div className="p-6 border-b border-gray-200">
+        <h3 className="text-lg font-semibold">
+          {requestFilter === "all"
+            ? "All Requests"
+            : `${requestFilter.charAt(0).toUpperCase() + requestFilter.slice(1)} Requests`}
+        </h3>
+      </div>
+
+      <div className="divide-y divide-gray-100">
         {getFilteredRequests().length === 0 ? (
-          <div className="text-center py-12">
-            <div className="text-6xl mb-4">📋</div>
-            <h3 className="text-xl font-bold text-gray-600 mb-2">No Client Requests</h3>
-            <p className="text-gray-500">Client requests and booking inquiries will appear here.</p>
+          <div className="text-center py-10 text-gray-500">
+            No client requests found.
           </div>
         ) : (
-          <div className="space-y-4">
-            {getFilteredRequests().map((req) => (
-              <div
-  key={request.id}
-  className="border border-gray-200 rounded-lg p-4 flex justify-between items-center"
->
-  <div>
-    <h4 className="font-bold text-stone-800">{request.client}</h4>
-    <p className="text-gray-600">{request.service}</p>
-    <p className="text-gray-500 text-sm">
-      {request.date} • {request.time}
-    </p>
-    <p className="text-gray-700 mt-2">{request.message}</p>
-  </div>
+          getFilteredRequests().map((request) => (
+            <div
+              key={request.id}
+              className="p-6 hover:bg-gray-50 transition-colors flex justify-between items-start"
+            >
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <h4 className="font-semibold text-gray-800">{request.client}</h4>
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      request.status === "pending"
+                        ? "bg-yellow-100 text-yellow-700"
+                        : request.status === "confirmed"
+                        ? "bg-green-100 text-green-700"
+                        : request.status === "completed"
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {request.status}
+                  </span>
+                  <span className={`text-xs font-medium ${getUrgencyColor(request.urgency)}`}>
+  {request.urgency === "high" && "🔴"} {request.urgency}
+</span>
 
-  <div className="flex items-center gap-3">
-    <span
-      className={`px-3 py-1 rounded-full text-sm ${
-        request.status === "pending"
-          ? "bg-yellow-100 text-yellow-800"
-          : request.status === "confirmed"
-          ? "bg-green-100 text-green-800"
-          : request.status === "completed"
-          ? "bg-blue-100 text-blue-800"
-          : "bg-red-100 text-red-800"
-      }`}
-    >
-      {request.status}
-    </span>
+                </div>
 
-    {request.status === "pending" && (
-      <div className="flex gap-2">
-        <button
-          onClick={() => updateRequestStatus(request.id, "confirmed")}
-          className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 transition"
-        >
-          Accept
-        </button>
-        <button
-          onClick={() => updateRequestStatus(request.id, "declined")}
-          className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition"
-        >
-          Decline
-        </button>
-      </div>
-    )}
-  </div>
-</div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                  <div>
+                    <p className="text-sm text-gray-500">Service</p>
+                    <p className="font-medium text-gray-800">{request.service}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Date & Time</p>
+                    <p className="font-medium text-gray-800">
+                      {new Date(request.date).toLocaleDateString()} at{" "}
+                      {request.time
+                        ? new Date(`1970-01-01T${request.time}`).toLocaleTimeString([], {
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })
+                        : ""}
+                    </p>
+                  </div>
+                </div>
 
-            ))}
-          </div>
+                <div className="mb-2">
+                  <p className="text-sm text-gray-500 mb-1">Message</p>
+                  <p className="text-sm text-gray-700">{request.message}</p>
+                </div>
+
+                <div className="text-xs text-gray-500 mt-2">
+                  Requested on: {new Date(request.created_at).toLocaleDateString()}
+                </div>
+              </div>
+
+              {/* ACTION BUTTONS */}
+              <div className="flex flex-col gap-2 ml-4">
+                {request.status === "pending" && (
+                  <>
+                    <button
+                      onClick={() => updateRequestStatus(request.id, "confirmed")}
+                      className="bg-green-500 hover:bg-green-600 text-white px-4 py-1 rounded-lg text-sm"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => updateRequestStatus(request.id, "declined")}
+                      className="bg-red-500 hover:bg-red-600 text-white px-4 py-1 rounded-lg text-sm"
+                    >
+                      Decline
+                    </button>
+                  </>
+                )}
+
+                {/* ✅ NEW: mark as completed when confirmed */}
+                {request.status === "confirmed" && (
+                  <button
+                    onClick={() => markAsCompleted(request)}
+                    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-1 rounded-lg text-sm"
+                  >
+                    Mark as Completed
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>
   </div>
 )}
+
 
 
           {/* Earnings Overview */}
