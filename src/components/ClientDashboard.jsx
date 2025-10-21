@@ -524,14 +524,17 @@ const fetchConversations = async () => {
     const data = await res.json();
 
     const normalized = (data || []).map((c) => ({
-      ...c,
-      client_avatar:
-        c.client_avatar || c.client_profile_picture || c.profile_picture || null,
-      professional_avatar:
-        c.professional_avatar || c.professional_profile_picture || c.profile_picture || null,
-      last_message: c.last_message ?? "",
-      updated_at: c.updated_at ?? new Date().toISOString(),
-    }));
+  ...c,
+  client_unread: c.client_unread ?? false,
+  professional_unread: c.professional_unread ?? false,
+  client_avatar:
+    c.client_avatar || c.client_profile_picture || c.profile_picture || null,
+  professional_avatar:
+    c.professional_avatar || c.professional_profile_picture || c.profile_picture || null,
+  last_message: c.last_message ?? "",
+  updated_at: c.updated_at ?? new Date().toISOString(),
+}));
+
 
     setMessagesData((prev) => ({
       ...prev,
@@ -548,6 +551,25 @@ const handleOpenMessage = async (conversation) => {
   try {
     // ✅ Fetch messages first
     await fetchChatMessages(conversation.id);
+
+    // mark as read (client side + backend)
+try {
+  await fetch(`${apiUrl}/conversations/${conversation.id}/mark-read`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role: "client" }),
+  });
+
+  setMessagesData((prev) => ({
+    ...prev,
+    conversations: prev.conversations.map((c) =>
+      c.id === conversation.id ? { ...c, client_unread: false } : c
+    ),
+  }));
+} catch (err) {
+  console.error("Failed to mark as read:", err);
+}
+
 
     // ✅ Set the selected conversation
     setSelectedMessage({
@@ -2073,10 +2095,12 @@ const [bookings, setBookings] = useState({
 
                 return (
                   <div
-                    key={convo.id}
-                    className={`relative p-6 hover:bg-accent/50 transition-colors cursor-pointer ${
-                      selectedMessage?.id === convo.id ? "bg-accent/50" : ""
-                    }`}
+  key={convo.id}
+  className={`relative p-6 transition-colors cursor-pointer
+    ${selectedMessage?.id === convo.id ? "bg-blue-50" : ""}
+    ${convo.client_unread ? "bg-blue-300 hover:bg-blue-400" : "hover:bg-accent/50"}
+  `}
+
                     onClick={() => {
                       handleOpenMessage(convo);
                 

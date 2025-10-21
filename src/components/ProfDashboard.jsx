@@ -276,34 +276,29 @@ const fetchConversations = async () => {
     const res = await fetch(`${apiUrl}/conversations/${user.id}`);
     const data = await res.json();
 
-    // backend may return client_avatar/professional_avatar or profile_picture — normalize
     const normalized = (data || []).map((c) => ({
-  ...c,
-  client_avatar:
-    c.client_profile_picture ||
-    c.profile_picture ||
-    c.client_avatar_url ||
-    c.client_avatar ||
-    null,
-  professional_avatar:
-    c.professional_profile_picture ||
-    c.profile_picture ||
-    c.professional_avatar_url ||
-    c.professional_avatar ||
-    null,
-  last_message: c.last_message ?? c.lastMessage ?? "",
-  updated_at: c.updated_at ?? c.last_message_time ?? c.updatedAt ?? c.updatedAt,
-}));
-
-
-    // keep only conversations with messages (optional)
-    const validConversations = normalized.filter(
-      (convo) => convo.last_message && convo.last_message.toString().trim() !== ""
-    );
+      ...c,
+      client_unread: c.client_unread ?? false,
+      professional_unread: c.professional_unread ?? false,
+      client_avatar:
+        c.client_profile_picture ||
+        c.profile_picture ||
+        c.client_avatar_url ||
+        c.client_avatar ||
+        null,
+      professional_avatar:
+        c.professional_profile_picture ||
+        c.profile_picture ||
+        c.professional_avatar_url ||
+        c.professional_avatar ||
+        null,
+      last_message: c.last_message ?? c.lastMessage ?? "",
+      updated_at: c.updated_at ?? c.last_message_time ?? c.updatedAt ?? new Date().toISOString(),
+    }));
 
     setMessagesData((prev) => ({
       ...prev,
-      conversations: validConversations,
+      conversations: normalized,
     }));
   } catch (err) {
     console.error("Fetch conversations error:", err);
@@ -322,10 +317,10 @@ const handleOpenMessage = async (client) => {
         client_id: client.id,
       }),
     });
+
     const data = await res.json();
 
     if (data.success) {
-      // normalize avatar: prefer full URL if supplied by backend; else prefix apiUrl if backend stores path
       const avatar =
         client.profile_picture ||
         client.avatar ||
@@ -340,13 +335,37 @@ const handleOpenMessage = async (client) => {
       });
 
       setIsChatOpen(true);
-      // load chat messages for that conversation
+
+      // ✅ Fetch messages and mark as read
       await fetchChatMessages(data.conversation.id);
-      // refresh sidebar conversations (so last_message/updated_at updates)
+      await markAsRead(data.conversation.id);
+
+      // Refresh sidebar
       await fetchConversations();
     }
   } catch (err) {
     console.error("Open message error:", err);
+  }
+};
+
+
+const markAsRead = async (conversationId) => {
+  try {
+    await fetch(`${apiUrl}/conversations/${conversationId}/mark-read`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "professional" }),
+    });
+
+    // Update local state immediately
+    setMessagesData((prev) => ({
+      ...prev,
+      conversations: prev.conversations.map((c) =>
+        c.id === conversationId ? { ...c, professional_unread: false } : c
+      ),
+    }));
+  } catch (err) {
+    console.error("Mark as read error:", err);
   }
 };
 
@@ -390,6 +409,8 @@ const fetchChatMessages = async (conversationId) => {
 const fetchMessageHistory = async (conversationId) => {
   // wrapper so your sidebar chat uses the same logic
   await fetchChatMessages(conversationId);
+  await markAsRead(conversationId);
+
 };
 
 
@@ -2822,16 +2843,18 @@ const handleUnarchiveConversation = async (id) => {
                   : "/default-avatar.png";
 
                 return (
-                  <div
-                    key={convo.id}
-                    className={`relative p-6 hover:bg-accent/50 transition-colors cursor-pointer ${
-                      selectedMessage?.id === convo.id ? "bg-accent/50" : ""
-                    }`}
-                    onClick={() => {
-                      setSelectedMessage(convo);
-                      fetchMessageHistory(convo.id); // ✅ load chat when clicked
-                    }}
-                  >
+                 <div
+  key={convo.id}
+  className={`relative p-6 transition-colors cursor-pointer
+    ${selectedMessage?.id === convo.id ? "bg-blue-50" : ""}
+    ${convo.professional_unread ? "bg-blue-200 hover:bg-blue-300" : "hover:bg-accent/50"}
+  `}
+  onClick={() => {
+    setSelectedMessage(convo);
+    fetchMessageHistory(convo.id); // ✅ load chat when clicked
+  }}
+>
+
                     <div className="flex items-start gap-4">
                       {/* ✅ Avatar */}
                       <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
