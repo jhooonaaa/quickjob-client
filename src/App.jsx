@@ -17,7 +17,6 @@ function App() {
   const handleLogin = async () => {
   try {
     const response = await axios.post(`${apiUrl}/login`, { email, password });
-
     if (response.data.success) {
       const userData = {
         id: response.data.id,
@@ -92,7 +91,6 @@ function App() {
         <nav className="w-full flex justify-between items-center p-6 bg-white shadow-md fixed top-0 z-50">
           <div className="text-2xl font-bold text-stone-800 cursor-pointer">QuickJob</div>
           <ul className="flex gap-6 items-center text-stone-700 font-medium">
-            <li>Home</li>
             <li>About Us</li>
             <li>
               <button

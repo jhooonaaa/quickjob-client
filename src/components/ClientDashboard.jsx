@@ -27,7 +27,6 @@ export default function ClientDashboard() {
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef(null);
   const [openMenuId, setOpenMenuId] = useState(null);
-const [searchTerm, setSearchTerm] = useState("");
 const [professionals, setProfessionals] = useState([]);
 const [selectedProfessional, setSelectedProfessional] = useState(null);
 const [professionalDetails, setProfessionalDetails] = useState(null);
@@ -48,6 +47,23 @@ const [feedbackComment, setFeedbackComment] = useState("");
 const [bookingFilter, setBookingFilter] = useState("all");
 const [savedProfessionals, setSavedProfessionals] = useState([]);
 const [favorites, setFavorites] = useState([]);
+const [searchTerm, setSearchTerm] = useState("");
+const [messageFilter, setMessageFilter] = useState("all");
+const [messagesData, setMessagesData] = useState({ conversations: {}, messageHistory: {} });
+const [selectedMessage, setSelectedMessage] = useState(null);
+const [newMessage, setNewMessage] = useState("");
+const [floatingChat, setFloatingChat] = useState(null);
+const [isChatOpen, setIsChatOpen] = useState(false);
+const [chatMessages, setChatMessages] = useState([]);
+const [chatInput, setChatInput] = useState("");
+const [openMenu, setOpenMenu] = useState(null);
+const chatRef = useRef(null);
+const [showDeleteModal, setShowDeleteModal] = useState(false);
+const [deleteTarget, setDeleteTarget] = useState(null);
+
+
+
+
 
 const fetchNotifications = async () => {
   try {
@@ -409,6 +425,404 @@ const handleFeedbackSubmit = async (e) => {
     toast.error("❌ Failed to submit feedback.");
   }
 };
+
+// 🗑️ Open delete modal
+const confirmDeleteConversation = (id) => {
+  setDeleteTarget(id);
+  setShowDeleteModal(true);
+};
+
+const handleDeleteConversation = async () => {
+  if (!deleteTarget) return;
+
+  try {
+    await fetch(`${apiUrl}/conversations/${deleteTarget}/client`, {
+      method: "DELETE",
+    });
+
+    // remove from conversation list
+    setMessagesData((prev) => ({
+      ...prev,
+      conversations: prev.conversations.filter((c) => c.id !== deleteTarget),
+    }));
+
+    // ✅ Clear floating chat if it's the same conversation
+    if (floatingChat?.conversation_id === deleteTarget) {
+      setFloatingChat(null);
+      setIsChatOpen(false);
+      setChatMessages([]);
+    }
+
+    // ✅ Clear sidebar chat selection
+    if (selectedMessage?.id === deleteTarget) {
+      setSelectedMessage(null);
+    }
+
+    // ✅ Refresh updated conversations
+    fetchConversations();
+
+    setShowDeleteModal(false);
+    setDeleteTarget(null);
+  } catch (err) {
+    console.error("Delete conversation error:", err);
+  }
+};
+
+
+
+// 📦 Archive
+const handleArchiveConversation = async (id) => {
+  try {
+    const res = await fetch(`${apiUrl}/conversations/${id}/archive`, {
+      method: "PUT",
+    });
+
+    if (!res.ok) throw new Error("Failed to archive conversation");
+
+    setMessagesData((prev) => ({
+      ...prev,
+      conversations: prev.conversations.map((c) =>
+        c.id === id ? { ...c, is_archived: true } : c
+      ),
+    }));
+
+    setOpenMenu(null);
+  } catch (err) {
+    console.error("Archive conversation error:", err);
+  }
+};
+
+// ♻️ Unarchive
+const handleUnarchiveConversation = async (id) => {
+  try {
+    const res = await fetch(`${apiUrl}/conversations/${id}/unarchive`, {
+      method: "PUT",
+    });
+
+    if (!res.ok) throw new Error("Failed to unarchive conversation");
+
+    setMessagesData((prev) => ({
+      ...prev,
+      conversations: prev.conversations.map((c) =>
+        c.id === id ? { ...c, is_archived: false } : c
+      ),
+    }));
+
+    setOpenMenu(null);
+  } catch (err) {
+    console.error("Unarchive conversation error:", err);
+  }
+};
+
+
+// MESSAGES
+const fetchConversations = async () => {
+  if (!user?.id) return;
+
+  try {
+    const res = await fetch(`${apiUrl}/conversations/${user.id}`);
+    const data = await res.json();
+
+    const normalized = (data || []).map((c) => ({
+      ...c,
+      client_avatar:
+        c.client_avatar || c.client_profile_picture || c.profile_picture || null,
+      professional_avatar:
+        c.professional_avatar || c.professional_profile_picture || c.profile_picture || null,
+      last_message: c.last_message ?? "",
+      updated_at: c.updated_at ?? new Date().toISOString(),
+    }));
+
+    setMessagesData((prev) => ({
+      ...prev,
+      conversations: normalized,
+    }));
+  } catch (err) {
+    console.error("Fetch conversations error:", err);
+  }
+};
+
+const handleOpenMessage = async (conversation) => {
+  if (!conversation?.id) return;
+
+  try {
+    // ✅ Fetch messages first
+    await fetchChatMessages(conversation.id);
+
+    // ✅ Set the selected conversation
+    setSelectedMessage({
+      ...conversation,
+      professional_name: conversation.professional_name,
+      professional_avatar:
+        conversation.professional_avatar || conversation.profile_picture,
+    });
+
+    // ✅ Smooth scroll automatically
+    setTimeout(() => {
+      if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+    }, 100);
+
+  } catch (err) {
+    console.error("Open message error:", err);
+  }
+};
+
+
+
+
+
+
+const getAvatarUrl = (selectedMessage) => {
+  if (!selectedMessage) return "/default-avatar.png";
+
+  const rawAvatar =
+    selectedMessage.professional_avatar ||
+    selectedMessage.professional_profile_picture ||
+    "/default-avatar.png";
+
+  if (rawAvatar.startsWith("http")) return rawAvatar;
+  if (rawAvatar.startsWith("/uploads/")) return `${apiUrl}${rawAvatar}`;
+  return `${apiUrl}/uploads/${rawAvatar}`;
+};
+
+
+useEffect(() => {
+  if (user) fetchConversations();
+}, [user]);
+
+
+const getFilteredMessages = () => {
+  const allMessages = Array.isArray(messagesData?.conversations)
+    ? messagesData.conversations
+    : []; // ✅ always fallback to an array
+
+  // Filter by message type
+  let filtered = allMessages.filter((m) => {
+    switch (messageFilter) {
+      case "archived":
+        return m.is_archived;
+      case "unread":
+        return m.unread && !m.is_archived;
+      default:
+        return !m.is_archived;
+    }
+  });
+
+  // Filter by search term
+  if (searchTerm.trim() !== "") {
+    filtered = filtered.filter((m) => {
+      const isClient = user.role === "client";
+      const nameToCheck = isClient ? m.professional_name : m.client_name;
+      return nameToCheck?.toLowerCase().includes(searchTerm.toLowerCase());
+    });
+  }
+
+  return filtered;
+};
+
+
+const sendMessage = async () => {
+  if (!newMessage.trim() || !selectedMessage) return;
+
+  const conversationId = selectedMessage.id;
+
+  // ✅ Add locally right away (optimistic UI)
+  const localMsg = {
+    message: newMessage,
+    sender: user.role,
+    timestamp: new Date().toISOString(),
+  };
+
+  setMessagesData((prev) => ({
+    ...prev,
+    messageHistory: {
+      ...prev.messageHistory,
+      [conversationId]: [
+        ...(prev.messageHistory[conversationId] || []),
+        localMsg,
+      ],
+    },
+  }));
+
+  setNewMessage("");
+
+  try {
+    const res = await fetch(`${apiUrl}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        sender_id: user.id,
+        message: newMessage,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (data.success && data.message) {
+      // ✅ update sidebar instantly
+      setMessagesData((prev) => {
+        const updatedConvos = prev.conversations.map((c) =>
+          c.id === conversationId
+            ? { ...c, last_message: newMessage, updated_at: new Date().toISOString() }
+            : c
+        );
+        updatedConvos.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+        return { ...prev, conversations: updatedConvos };
+      });
+    }
+  } catch (err) {
+    console.error("Failed to send message:", err);
+  }
+};
+
+
+//message button
+const handleMessageProfessional = async (professional) => {
+  if (!professional?.id) return;
+
+  try {
+    const res = await fetch(`${apiUrl}/conversations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        professional_id: professional.id,
+        client_id: user.id, // client is sending message
+      }),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      const avatar =
+        professional.profile_picture ||
+        professional.avatar ||
+        professional.profile_picture_url ||
+        (professional.avatar_path ? `${apiUrl}${professional.avatar_path}` : null);
+
+      setFloatingChat({
+        conversation_id: data.conversation.id,
+        client: professional.name || professional.full_name || professional.username,
+        avatar,
+        id: professional.id,
+      });
+
+      setIsChatOpen(true);
+      await fetchChatMessages(data.conversation.id);
+      await fetchConversations();
+    }
+  } catch (err) {
+    console.error("Open message error:", err);
+  }
+};
+
+const sendChatMessage = async () => {
+  if (!chatInput.trim() || !floatingChat?.conversation_id) return;
+
+  const msg = {
+    conversation_id: floatingChat.conversation_id,
+    sender_id: user.id,
+    message: chatInput,
+  };
+
+  // ✅ Add message instantly to floating chat
+  const localMsg = {
+    message: chatInput,
+    sender: user.role,
+    timestamp: new Date().toISOString(),
+  };
+  setChatMessages((prev) => [...prev, localMsg]);
+  setChatInput("");
+
+  try {
+    const res = await fetch(`${apiUrl}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(msg),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      // ✅ Instantly update sidebar last message
+      setMessagesData((prev) => {
+        const updatedConvos = prev.conversations.map((c) =>
+          c.id === floatingChat.conversation_id
+            ? { ...c, last_message: msg.message, updated_at: new Date().toISOString() }
+            : c
+        );
+        updatedConvos.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+        return { ...prev, conversations: updatedConvos };
+      });
+    }
+  } catch (err) {
+    console.error("Send chat message error:", err);
+  }
+};
+
+
+const fetchChatMessages = async (conversation_id) => {
+  if (!conversation_id) return;
+
+  try {
+    const res = await fetch(`${apiUrl}/messages/${conversation_id}/${user.id}`);
+    const data = await res.json();
+
+    if (Array.isArray(data)) {
+      // ✅ Normalize messages
+      const normalizedMessages = data.map((m) => ({
+        message: m.message ?? "",
+        sender:
+          m.sender_id === user.id
+            ? user.role // current user
+            : user.role === "client"
+            ? "professional"
+            : "client",
+        timestamp: m.created_at ?? m.timestamp ?? "",
+      }));
+
+      // ✅ Update floating chat messages (for popup chat)
+      setChatMessages(normalizedMessages);
+
+      // ✅ Update main messagesData history (for sidebar/main chat)
+      setMessagesData((prev) => ({
+        ...prev,
+        messageHistory: {
+          ...prev.messageHistory,
+          [conversation_id]: normalizedMessages,
+        },
+      }));
+    } else {
+      console.error("Unexpected messages format:", data);
+    }
+  } catch (err) {
+    console.error("Fetch messages error:", err);
+  }
+};
+
+
+
+// Auto-scroll chat on new messages
+useEffect(() => {
+  const chatBox = chatRef.current;
+  if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
+}, [chatMessages]);
+
+// 🧩 Auto-refresh chat + sidebar in sync (every 2 seconds)
+useEffect(() => {
+  if (!user) return;
+
+  const interval = setInterval(() => {
+    fetchConversations(); // refresh sidebar
+
+    if (floatingChat?.conversation_id) {
+      fetchChatMessages(floatingChat.conversation_id); // floating chat refresh
+    } else if (selectedMessage?.id) {
+      fetchChatMessages(selectedMessage.id); // main chat refresh
+    }
+  }, 2000); // every 2 seconds (adjust if needed)
+
+  return () => clearInterval(interval);
+}, [user, floatingChat?.conversation_id, selectedMessage?.id]);
+
 
 
   useEffect(() => {
@@ -1031,16 +1445,103 @@ const [bookings, setBookings] = useState({
       </div>
     </div>
 
-    {/* RIGHT SIDE - Request Booking Button */}
-    <div className="mt-2 md:mt-0">
+    {/* RIGHT SIDE - Request Booking + Message Button */}
+<div className="mt-2 md:mt-0 flex gap-2">
+  {/* Request Booking Button */}
+  <button
+    onClick={() => setShowBookingModal(true)}
+    className="bg-blue-600 text-white px-4 py-1.5 rounded-md hover:bg-blue-700 shadow-sm text-sm font-medium transition"
+  >
+    📅 Request Booking
+  </button>
+
+  {/* Message Button */}
+  <button
+    onClick={() => handleMessageProfessional(professionalDetails?.profile)}
+    className="bg-green-600 text-white px-4 py-1.5 rounded-md hover:bg-green-700 shadow-sm text-sm font-medium transition"
+  >
+    💬 Message
+  </button>
+</div>
+
+  </div>
+
+  {/* 💬 Floating Chat */}
+{isChatOpen && floatingChat && (
+  <div className="fixed bottom-6 right-6 z-50 w-80 bg-white border border-gray-300 rounded-2xl shadow-2xl overflow-hidden animate-fadeIn">
+    <div className="flex items-center justify-between bg-blue-600 text-white p-3">
+      <div className="flex items-center gap-3">
+        {floatingChat.avatar ? (
+          <img
+            src={floatingChat.avatar}
+            alt="Avatar"
+            className="w-8 h-8 rounded-full object-cover border-2 border-white"
+          />
+        ) : (
+          <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center font-semibold">
+            {floatingChat.client?.charAt(0) || "?"}
+          </div>
+        )}
+        <div>
+          <p className="font-semibold text-sm leading-none">{floatingChat.client}</p>
+        </div>
+      </div>
       <button
-        onClick={() => setShowBookingModal(true)}
-        className="bg-blue-600 text-white px-4 py-1.5 rounded-md hover:bg-blue-700 shadow-sm text-sm font-medium transition"
+        onClick={() => {
+          setIsChatOpen(false);
+          setFloatingChat(null);
+        }}
+        className="text-white hover:text-gray-200"
       >
-        📅 Request Booking
+        ✕
+      </button>
+    </div>
+
+    <div ref={chatRef} className="chat-messages-container p-4 h-64 overflow-y-auto bg-gray-50 space-y-3">
+      {chatMessages.map((msg, i) => {
+  const isMine = msg.sender === user.role; // ✅ FIXED
+  return (
+    <div key={i} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`max-w-[75%] px-3 py-2 rounded-lg text-sm ${
+          isMine ? "bg-blue-600 text-white" : "bg-white border text-gray-800"
+        }`}
+      >
+        {msg.message}
+        <div className="text-[10px] mt-1 opacity-70 text-right">
+          {msg.timestamp
+            ? new Date(msg.timestamp).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : ""}
+        </div>
+      </div>
+    </div>
+  );
+})}
+
+    </div>
+
+    <div className="flex items-center gap-2 p-3 border-t bg-white">
+      <input
+        type="text"
+        value={chatInput}
+        onChange={(e) => setChatInput(e.target.value)}
+        placeholder="Type a message..."
+        className="flex-1 border border-gray-300 rounded-full px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        onKeyDown={(e) => e.key === "Enter" && sendChatMessage()}
+      />
+      <button
+        onClick={sendChatMessage}
+        className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-3 py-2 text-sm"
+      >
+        ➤
       </button>
     </div>
   </div>
+)}
+
 
   {/* 🧾 BOOKING MODAL */}
   {showBookingModal && (
@@ -1514,15 +2015,266 @@ const [bookings, setBookings] = useState({
 )}
 
 
-          {/* 6. MESSAGES */}
-          {activeTab === "messages" && (
-            <div>
-              <h2 className="text-2xl font-semibold mb-4">Messages</h2>
-              <div className="bg-white p-4 rounded shadow">
-                <p className="text-gray-600">Chat feature coming soon...</p>
+        {activeTab === "messages" && (
+  <div className="space-y-6">
+    {!selectedMessage ? (
+      <>
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold">Messages</h2>
+            <p className="text-muted-foreground">Chat with professionals</p>
+          </div>
+
+          {/* Search + Filter */}
+          <div className="flex gap-3">
+            <input
+              type="text"
+              placeholder="Search professionals..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-3 pr-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+            <select
+              value={messageFilter}
+              onChange={(e) => setMessageFilter(e.target.value)}
+              className="px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            >
+              <option value="all">All Messages</option>
+              <option value="unread">Unread</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Conversations List */}
+        <div className="bg-card border border-border rounded-lg mt-6">
+          <div className="p-6 border-b border-border">
+            <h3 className="text-lg font-semibold">
+              {messageFilter === "archived" ? "Archived Conversations" : "Conversations"}
+            </h3>
+          </div>
+
+          <div className="divide-y divide-border">
+            {getFilteredMessages()?.length > 0 ? (
+              getFilteredMessages().map((convo) => {
+                const displayName = convo.professional_name;
+                const displayAvatar =
+                  convo.professional_avatar ||
+                  convo.professional_profile_picture ||
+                  convo.professional_id_photo ||
+                  "/default-avatar.png";
+
+                const avatarSrc = displayAvatar.startsWith("http")
+                  ? displayAvatar
+                  : displayAvatar.startsWith("/uploads/")
+                  ? `${apiUrl}${displayAvatar}`
+                  : `${apiUrl}/uploads/${displayAvatar}`;
+
+                return (
+                  <div
+                    key={convo.id}
+                    className={`relative p-6 hover:bg-accent/50 transition-colors cursor-pointer ${
+                      selectedMessage?.id === convo.id ? "bg-accent/50" : ""
+                    }`}
+                    onClick={() => {
+                      handleOpenMessage(convo);
+                
+                    }}
+                  >
+                    <div className="flex items-start gap-4">
+                      {/* Avatar */}
+                      <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+                        <img
+                          src={avatarSrc}
+                          alt={displayName}
+                          className="w-full h-full object-cover rounded-full"
+                          onError={(e) => (e.target.src = "/default-avatar.png")}
+                        />
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <h4 className="font-medium">{displayName}</h4>
+                          <span className="text-sm text-muted-foreground">
+                            {convo.updated_at
+                              ? new Date(convo.updated_at).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : ""}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {convo.last_message || "No messages yet"}
+                        </p>
+                      </div>
+
+                      {/* 3-dot menu (Archive/Delete) */}
+                      <div
+                        className="relative flex-shrink-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          onClick={() =>
+                            setOpenMenu((prev) => (prev === convo.id ? null : convo.id))
+                          }
+                          className="p-2 rounded-full hover:bg-gray-100 text-lg font-bold leading-none"
+                        >
+                          ...
+                        </button>
+
+                        {openMenu === convo.id && (
+                          <div className="absolute right-0 mt-2 w-28 bg-white border border-gray-200 rounded-lg shadow-md z-10">
+                            {messageFilter !== "archived" ? (
+                              <>
+                                <button
+                                  onClick={() => confirmDeleteConversation(convo.id)}
+                                  className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                                >
+                                  Delete
+                                </button>
+                                <button
+                                  onClick={() => handleArchiveConversation(convo.id)}
+                                  className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                                >
+                                  Archive
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => handleUnarchiveConversation(convo.id)}
+                                className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                              >
+                                Unarchive
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="p-6 text-center text-muted-foreground">
+                No {messageFilter === "archived" ? "archived" : ""} conversations found.
               </div>
-            </div>
+            )}
+          </div>
+        </div>
+{showDeleteModal && (
+  <div className="fixed inset-0 backdrop-blur-sm bg-white/20 flex items-center justify-center z-50">
+    <div className="bg-white rounded-2xl shadow-2xl p-6 w-80 text-center border border-gray-200">
+      <h3 className="text-lg font-semibold mb-3 text-gray-800">
+        Delete Conversation?
+      </h3>
+      <p className="text-gray-600 mb-6 text-sm">
+        This will permanently remove all messages in this conversation.
+      </p>
+
+      <div className="flex justify-center gap-3">
+        <button
+          onClick={() => setShowDeleteModal(false)}
+          className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleDeleteConversation}
+          className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+      </>
+    ) : (
+      /* Chat Window */
+      <div className="bg-white border border-gray-300 rounded-2xl overflow-hidden shadow-sm flex flex-col h-[500px]">
+        <div className="flex items-center justify-between bg-blue-600 text-white p-3 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSelectedMessage(null)}
+              className="text-white text-lg font-bold hover:text-gray-200"
+            >
+              ←
+            </button>
+            {selectedMessage && (
+              <>
+                <img
+  src={getAvatarUrl(selectedMessage)}
+  alt={selectedMessage.professional_name || "Professional"}
+  className="w-8 h-8 rounded-full object-cover border-2 border-white"
+  onError={(e) => (e.target.src = "/default-avatar.png")}
+/>
+
+                <div>
+                  <p className="font-semibold text-sm leading-none">
+                    {selectedMessage.professional_name}
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div
+          ref={chatRef}
+          className="flex-1 p-4 overflow-y-auto bg-gray-50 space-y-3 chat-messages-container"
+        >
+          {messagesData?.messageHistory?.[selectedMessage.id]?.length ? (
+            messagesData.messageHistory[selectedMessage.id].map((message, i) => {
+              const isMine = message.sender === user.role;
+              return (
+                <div key={i} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                  <div
+                    className={`max-w-[75%] px-3 py-2 rounded-lg text-sm ${
+                      isMine ? "bg-blue-600 text-white" : "bg-white border text-gray-800"
+                    }`}
+                  >
+                    {message.message}
+                    <div className="text-[10px] mt-1 opacity-70 text-right">
+                      {new Date(message.timestamp).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <p className="text-center text-sm text-gray-500">No messages yet.</p>
           )}
+        </div>
+
+        {/* Input */}
+        <div className="flex items-center gap-2 p-3 border-t bg-white flex-shrink-0">
+          <input
+            type="text"
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            placeholder="Type a message..."
+            className="flex-1 border border-gray-300 rounded-full px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+          />
+          <button
+            onClick={sendMessage}
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-3 py-2 text-sm"
+          >
+            ➤
+          </button>
+        </div>
+      </div>
+    )}
+  </div>
+)}
+
 
           {/* 8. REVIEWS */}
           {activeTab === "reviews" && (

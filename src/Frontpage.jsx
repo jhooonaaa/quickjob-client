@@ -11,9 +11,6 @@ export default function FrontPage() {
           QuickJob
         </div>
         <ul className="flex gap-6 items-center">
-          <li className="cursor-pointer hover:text-amber-400" onClick={() => navigate("/")}>
-            Home
-          </li>
           <li className="cursor-pointer hover:text-amber-400" onClick={() => navigate("/about")}>
             About Us
           </li>
